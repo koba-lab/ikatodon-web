@@ -1,0 +1,21 @@
+# Terraform
+# state には秘密情報が平文で入る。state は R2 にだけ置き、絶対にコミットしない。
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!example.tfvars
+.terraform/
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# 秘密情報
+.env
+.env.*
+
+# OS / エディタ
+.DS_Store
