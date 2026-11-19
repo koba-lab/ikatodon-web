@@ -1,0 +1,125 @@
+name: Tunnel image
+
+# トンネルのトークンを焼き込んだ cloudflared イメージを ghcr.io/koba-lab/ikatodon-tunnel に push する。
+# トークンはビルドのたびに Cloudflare API から取得するので、GitHub の Secret には保存しない。
+#
+# パッケージが Private でないと、誰でもトークンを取り出せてしまう。そのため push の前後で
+# 公開範囲を確かめ、Private でなければ失敗させる。パッケージがまだ無いとき（初回）は、
+# トークンを含まないイメージだけを push してパッケージを作り、確認を促して止まる。
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Dockerfile'
+      - '.github/workflows/tunnel-image.yml'
+  # トンネルの secret を変えたあとなど、トークンを入れ直したいときに手で実行する。
+  workflow_dispatch:
+
+concurrency:
+  group: tunnel-image
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/koba-lab/ikatodon-tunnel
+  PACKAGE_API: /orgs/koba-lab/packages/container/ikatodon-tunnel
+  TUNNEL_NAME: ikatodon-web
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check package visibility
+        id: package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          status=0
+          out=$(gh api "$PACKAGE_API" --jq .visibility 2>&1) || status=$?
+          if [ "$status" -eq 0 ]; then
+            if [ "$out" != "private" ]; then
+              echo "::error::パッケージの公開範囲が ${out} になっています。トークン入りのイメージは push しません。一度 Public になったパッケージは Private に戻せないため、パッケージを削除して作り直してください（docs/setup.md）。"
+              exit 1
+            fi
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif grep -q 'HTTP 404' <<<"$out"; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::パッケージの情報を取得できませんでした: ${out}"
+            exit 1
+          fi
+
+      - name: Create package without token (first run only)
+        if: steps.package.outputs.exists == 'false'
+        run: |
+          set -euo pipefail
+          base=$(sed -n 's/^FROM \(cloudflare\/cloudflared:[^ ]*\).*/\1/p' Dockerfile)
+          docker buildx imagetools create --tag "${IMAGE}:bootstrap" "$base"
+          echo "::error::パッケージを作成しました（トークンは含んでいません）。GitHub の Packages で ikatodon-tunnel が Private であることを確認し、このワークフローを再実行してください。"
+          exit 1
+
+      - name: Fetch tunnel token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          api() {
+            curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              "https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/$1"
+          }
+          tunnel_id=$(api "cfd_tunnel?name=${TUNNEL_NAME}&is_deleted=false" | jq -r '.result[0].id // empty')
+          if [ -z "$tunnel_id" ]; then
+            echo "::error::トンネル ${TUNNEL_NAME} が見つかりません。先に Terraform を apply してください。"
+            exit 1
+          fi
+          token=$(api "cfd_tunnel/${tunnel_id}/token" | jq -r '.result')
+          echo "::add-mask::${token}"
+          umask 077
+          printf '%s' "$token" > "${RUNNER_TEMP}/tunnel_token"
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          secret-files: |
+            tunnel_token=${{ runner.temp }}/tunnel_token
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+
+      - name: Remove token file
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/tunnel_token"
+
+      - name: Re-check package visibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          visibility=$(gh api "$PACKAGE_API" --jq .visibility)
+          if [ "$visibility" != "private" ]; then
+            echo "::error::パッケージが ${visibility} になっています。トークンが公開されています。docs/setup.md の「トークンが漏れたとき」の手順を直ちに実行してください。"
+            exit 1
+          fi

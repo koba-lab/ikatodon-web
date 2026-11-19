@@ -1,0 +1,115 @@
+name: Terraform (cloudflare)
+
+# このリポジトリは公開されている。Actions のログも公開されるので、
+# - 秘密情報を含む変数には sensitive = true を付ける
+# - plan ファイルを artifact に上げない（秘密情報が平文で入り、誰でもダウンロードできる）
+# - pull_request_target は使わない（フォークの PR に Secret を渡さないため）
+
+on:
+  pull_request:
+    paths:
+      - 'cloudflare/**'
+      - '.github/workflows/terraform.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'cloudflare/**'
+      - '.github/workflows/terraform.yml'
+  workflow_dispatch:
+
+# PR の plan、main の apply、main 以外のブランチからの手動実行でグループを分ける。
+# 同じグループだと、待機中の main の実行が後から来た別の実行に置き換えられ、apply されないことがある。
+concurrency:
+  group: terraform-cloudflare-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('ref-{0}', github.ref_name) }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: cloudflare
+
+env:
+  TF_IN_AUTOMATION: 'true'
+  TF_INPUT: 'false'
+  TERRAFORM_VERSION: '1.16.7'
+
+jobs:
+  check:
+    name: fmt / validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - run: terraform fmt -check -recursive -diff
+
+      - run: terraform init -backend=false
+
+      - run: terraform validate
+
+  plan:
+    name: plan
+    needs: check
+    # フォークからの PR と Dependabot の PR には Actions の Secret が渡らないので plan しない。
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_READ }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_ENDPOINT_URL_S3: https://${{ vars.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      TF_VAR_cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - run: terraform init
+
+      # state をロックしない読み取り専用の plan。ロックは concurrency で防ぐ。
+      - run: terraform plan -lock=false
+
+  apply:
+    name: apply
+    needs: plan
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Environment の required reviewers で、apply の前に人の承認を挟む。
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_ENDPOINT_URL_S3: https://${{ vars.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      TF_VAR_cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - run: terraform init
+
+      - run: terraform apply -auto-approve

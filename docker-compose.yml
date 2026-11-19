@@ -1,0 +1,16 @@
+# Web サーバー上で `docker compose up -d` する対象。
+# 各 Web サーバーの ~/ikatodon-web にクローンして使う（docs/setup.md）。
+#
+# Mastodon（~/live）とは別の compose プロジェクト。cloudflared は network_mode: host で動き、
+# Mastodon の web（127.0.0.1:3000）と streaming（127.0.0.1:4000）へ直接つなぐ。
+
+services:
+  tunnel:
+    image: ghcr.io/koba-lab/ikatodon-tunnel:latest
+    restart: always
+    network_mode: host
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
