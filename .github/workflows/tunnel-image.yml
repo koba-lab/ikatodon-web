@@ -63,7 +63,7 @@ jobs:
           out=$(gh api "$PACKAGE_API" --jq .visibility 2>&1) || status=$?
           if [ "$status" -eq 0 ]; then
             if [ "$out" != "private" ]; then
-              echo "::error::パッケージの公開範囲が ${out} になっています。トークン入りのイメージは push しません。一度 Public になったパッケージは Private に戻せないため、パッケージを削除して作り直してください（docs/setup.md）。"
+              echo "::error::パッケージの公開範囲が ${out} になっています。トークン入りのイメージは push しません。Package settings の Change visibility で Private に戻してから再実行してください（docs/setup.md）。"
               exit 1
             fi
             echo "exists=true" >> "$GITHUB_OUTPUT"

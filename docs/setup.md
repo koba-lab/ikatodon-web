@@ -115,8 +115,8 @@ Environment `production` に Required reviewers が設定されていないと�
 5. 4 が成功したら、visibility_test のチェックを外してもう一度実行する。今度はトークン入りの
    イメージが push されます。push の後にも Private のままかを確かめます
 
-パッケージが Public になってしまったら、トークンを含んでいない段階なら、パッケージを削除して
-1 からやり直します（GitHub Packages は一度 Public にすると Private に戻せません）。
+パッケージが Public になってしまったら、Package settings → Danger Zone → Change visibility で
+Private に戻してから 4 をやり直します（2026-11 に Public から Private へ戻せることを確認済み）。
 
 > [!WARNING]
 > トークン入りのイメージが一度でも Public になった場合や、トークンが漏れた疑いがある場合は、
@@ -161,10 +161,9 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://ika-tunnel-test.queloud
 
 トークンを持っていれば、偽のコネクタを立てて本番のトラフィックを受け取れます。次の順で対応します。
 
-1. **パッケージが Public になっていたら削除する。** GitHub Packages は一度 Public にすると
-   Private に戻せません。Packages の `ikatodon-tunnel` → Package settings → Delete this package。
-   同じ名前で作り直せない場合は、別名にして `.github/workflows/tunnel-image.yml` と
-   `docker-compose.yml` のイメージ名を変える
+1. **パッケージが Public になっていたら Private に戻す。** Packages の `ikatodon-tunnel` →
+   Package settings → Danger Zone → Change visibility。Private に戻しても、Public だった間に
+   取得されたトークンは使えてしまうので、2 以降は必ず行う
 2. **トンネルの secret を変える。** `cloudflare/variables.tf` の `tunnel_secret_generation` の
    既定値を 1 増やす PR を作り、マージして apply する
 3. **既存の接続を切る。** secret を変えても、古いトークンで接続済みのコネクタは切断されません。
