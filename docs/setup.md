@@ -28,7 +28,7 @@ Permission policies → Add policy）。
   - DNS（確認用ホスト名の CNAME）
   - Zone WAF（API 登録の遮断ルール）
   - Dynamic URL Redirects（`/ikatodon-media/` のリダイレクト）
-  - Zone Transform Rules または Transform Rules（`Forwarded` / `Proxy` ヘッダーの除去）
+  - Zone Transform Rules または Transform Rules（`Forwarded` ヘッダーの除去）
 
 | 用途     | 権限                                   | 登録先                                                    |
 | -------- | -------------------------------------- | --------------------------------------------------------- |

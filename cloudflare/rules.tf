@@ -56,9 +56,12 @@ resource "cloudflare_ruleset" "redirect" {
   ]
 }
 
-# クライアントが送ってきた Forwarded / Proxy ヘッダーをオリジンに渡さない。
-# 上流 Mastodon の dist/nginx.conf が `proxy_set_header Forwarded "";` と
-# `proxy_set_header Proxy "";` で行っている処理と同じ（Forwarded は上流 #41481、Proxy は httpoxy 対策）。
+# クライアントが送ってきた Forwarded ヘッダーをオリジンに渡さない。
+# 上流 Mastodon の dist/nginx.conf の `proxy_set_header Forwarded "";` と同じ（上流 #41481）。
+#
+# dist/nginx.conf は Proxy ヘッダーも消している（httpoxy 対策）が、Cloudflare の Transform Rules では
+# Proxy ヘッダーを操作できない（API が code 20087 で拒否する）。httpoxy は CGI 環境で HTTP_PROXY 環境変数に
+# 化ける問題で、Puma（Rack）で動く Mastodon は環境変数ではなく Rack env に入るため影響しない。
 resource "cloudflare_ruleset" "request_header_transform" {
   zone_id = var.cloudflare_zone_id
   name    = "ikatodon-web request header transforms"
@@ -67,14 +70,13 @@ resource "cloudflare_ruleset" "request_header_transform" {
 
   rules = [
     {
-      description = "Strip Forwarded and Proxy request headers"
+      description = "Strip Forwarded request header"
       expression  = local.host_expression
       action      = "rewrite"
       enabled     = true
       action_parameters = {
         headers = {
           "Forwarded" = { operation = "remove" }
-          "Proxy"     = { operation = "remove" }
         }
       }
     },
