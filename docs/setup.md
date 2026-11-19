@@ -187,7 +187,8 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://ika-tunnel-test.queloud
 
 ## イメージの更新
 
-`Dockerfile` を変えて `main` にマージすると `Tunnel image` が走ります。その後、各 Web サーバーで:
+`Dockerfile` を変えて `main` にマージしたら、Actions → Tunnel image → Run workflow で手動実行します
+（トークン入りのイメージを push するので、自動では動きません）。その後、各 Web サーバーで:
 
 ```bash
 cd ~/ikatodon-web && git pull && docker compose pull && docker compose up -d

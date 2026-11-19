@@ -10,14 +10,9 @@ name: Tunnel image
 # リポジトリの公開範囲を引き継いで Public になるため。パッケージは手元から Private で作り、
 # このリポジトリに Actions access（Write）を付けておく（docs/setup.md）。
 
+# トークン入りのイメージを push するので、自動では動かさず手で実行する
+# （Dockerfile を変えたあと、トンネルの secret を変えたあとなど）。
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'Dockerfile'
-      - '.github/workflows/tunnel-image.yml'
-  # トンネルの secret を変えたあとなど、トークンを入れ直したいときに手で実行する。
   workflow_dispatch:
     inputs:
       visibility_test:
@@ -35,7 +30,6 @@ permissions:
 
 env:
   IMAGE: ghcr.io/koba-lab/ikatodon-tunnel
-  PACKAGE_API: /orgs/koba-lab/packages/container/ikatodon-tunnel
   TUNNEL_NAME: ikatodon-web
 
 jobs:
@@ -53,47 +47,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check package visibility
-        id: package
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          status=0
-          out=$(gh api "$PACKAGE_API" --jq .visibility 2>&1) || status=$?
-          if [ "$status" -eq 0 ]; then
-            if [ "$out" != "private" ]; then
-              echo "::error::パッケージの公開範囲が ${out} になっています。トークン入りのイメージは push しません。Package settings の Change visibility で Private に戻してから再実行してください（docs/setup.md）。"
-              exit 1
-            fi
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          elif grep -q 'HTTP 404' <<<"$out"; then
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "::error::パッケージの情報を取得できませんでした: ${out}"
-            exit 1
-          fi
+      # ログインしていない状態で取得できないか（Private か）を、push の前に確かめる。
+      - name: Check package is private
+        run: .github/scripts/check-package.sh private
 
-      - name: Stop if package does not exist
-        if: steps.package.outputs.exists == 'false'
-        run: |
-          echo "::error::パッケージ ikatodon-tunnel がありません。このワークフローで作ると Public になるため、docs/setup.md の手順で手元から Private で作成してください。"
-          exit 1
+      - name: Check package exists
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: .github/scripts/check-package.sh exists
 
       # トークンを入れないイメージで、push しても Private のままかを確かめる（本番の push の前に一度）。
       - name: Visibility test (no token)
         if: inputs.visibility_test
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           base=$(sed -n 's/^FROM \(cloudflare\/cloudflared:[^ ]*\).*/\1/p' Dockerfile)
           docker buildx imagetools create --tag "${IMAGE}:visibility-test" "$base"
-          visibility=$(gh api "$PACKAGE_API" --jq .visibility)
-          if [ "$visibility" != "private" ]; then
-            echo "::error::push 後にパッケージが ${visibility} になりました。トークン入りのイメージは push しないでください（docs/setup.md）。"
-            exit 1
-          fi
+          .github/scripts/check-package.sh private
           echo "push 後も Private のままでした。visibility_test をオフにして実行すると、トークン入りのイメージを push します。"
 
       - name: Fetch tunnel token
@@ -137,14 +107,10 @@ jobs:
         if: always()
         run: rm -f "${RUNNER_TEMP}/tunnel_token"
 
-      - name: Re-check package visibility
+      - name: Re-check package is private
         if: ${{ !inputs.visibility_test }}
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          visibility=$(gh api "$PACKAGE_API" --jq .visibility)
-          if [ "$visibility" != "private" ]; then
-            echo "::error::パッケージが ${visibility} になっています。トークンが公開されています。docs/setup.md の「トークンが漏れたとき」の手順を直ちに実行してください。"
+          if ! .github/scripts/check-package.sh private; then
+            echo "::error::トークン入りのイメージが公開されている可能性があります。docs/setup.md の「トークンが漏れたとき」の手順を直ちに実行してください。"
             exit 1
           fi
