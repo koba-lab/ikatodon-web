@@ -134,7 +134,9 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://ika-tunnel-test.queloud
      "https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/cfd_tunnel/${TUNNEL_ID}/connections"
    ```
 
-4. **新しいトークンでイメージを作り直す。** `Tunnel image` ワークフローを手で実行する
+4. **新しいトークンでイメージを作り直す。** `Tunnel image` ワークフローを手で実行する。
+   1 でパッケージを削除した場合、最初の実行はトークンを含まないイメージでパッケージを作り直して
+   止まるので、Packages で **Private** になっていることを確認してから、もう一度実行する
 5. **両方の Web サーバーで入れ替える。**
 
    ```bash
