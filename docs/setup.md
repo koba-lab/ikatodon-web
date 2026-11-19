@@ -82,8 +82,10 @@ apply の前に Environment `production` の承認を求められます。
    apply より先に動いても、この段階ではトンネルを参照しないので問題ありません
 3. GitHub の Packages で `ikatodon-tunnel` を開き、次を確認する
    - Visibility が **Private** であること。Public になっていたら、この時点ではまだトークンを
-     含んでいないので、パッケージを削除して作り直す（GitHub Packages は一度 Public にすると
-     Private に戻せない）
+     含んでいないので、パッケージを削除する（GitHub Packages は一度 Public にすると Private に
+     戻せない）。そのあと Actions → Tunnel image → Run workflow で手動実行してパッケージを
+     作り直す。この実行もトークンなしのイメージを作って失敗するのが想定どおり。もう一度
+     Private であることを確認してから 4 へ進む
    - Manage Actions access に `ikatodon-web` リポジトリが Write で入っていること
 4. apply が終わってから、もう一度ワークフローを実行する。今度はトークン入りのイメージが push されます
 
