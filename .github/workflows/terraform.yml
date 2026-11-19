@@ -64,6 +64,13 @@ jobs:
       github.event_name != 'pull_request' ||
       (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Environment の設定（承認者）を確認するため
+      actions: read
+      # plan の結果を PR にコメントするため
+      issues: write
+      pull-requests: write
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_READ }}
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -71,10 +78,23 @@ jobs:
       AWS_ENDPOINT_URL_S3: https://${{ vars.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
       TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       TF_VAR_cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+
+      # main への push では、このあと apply が走る。Environment に承認者が設定されていないと
+      # 承認なしで apply されてしまうので、その場合はここで止める。
+      - name: Check approval is required for apply
+        if: github.event_name != 'pull_request'
+        run: |
+          n=$(gh api "repos/${GITHUB_REPOSITORY}/environments/production" \
+            --jq '[.protection_rules[]? | select(.type == "required_reviewers")] | length')
+          if [ "$n" -eq 0 ]; then
+            echo "::error::Environment production に Required reviewers が設定されていません。承認なしで apply されるのを防ぐため止めます（docs/setup.md の 3）。"
+            exit 1
+          fi
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -84,7 +104,30 @@ jobs:
       - run: terraform init
 
       # state をロックしない読み取り専用の plan。ロックは concurrency で防ぐ。
-      - run: terraform plan -lock=false
+      - name: terraform plan
+        id: plan
+        run: |
+          set +e
+          terraform plan -lock=false -no-color > "${RUNNER_TEMP}/plan.txt" 2>&1
+          code=$?
+          cat "${RUNNER_TEMP}/plan.txt"
+          echo "code=${code}" >> "$GITHUB_OUTPUT"
+
+      - name: Report plan
+        if: always() && steps.plan.outputs.code != ''
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EXTRA_NOTE: >-
+            ${{ github.event_name == 'pull_request'
+            && 'マージすると、この内容で apply します（承認が必要です）。'
+            || format('この内容で apply します。[実行画面]({0}/{1}/actions/runs/{2}) の **Review deployments** から承認してください。', github.server_url, github.repository, github.run_id) }}
+          MARKER: ${{ github.event_name == 'pull_request' && 'terraform-plan' || 'terraform-plan-main' }}
+        run: |
+          "${GITHUB_WORKSPACE}/.github/scripts/tf-report.sh" plan "${{ steps.plan.outputs.code }}" "${RUNNER_TEMP}/plan.txt" "$MARKER"
+
+      - name: Fail if plan failed
+        if: steps.plan.outputs.code != '0'
+        run: exit 1
 
   apply:
     name: apply
@@ -93,6 +136,11 @@ jobs:
     runs-on: ubuntu-latest
     # Environment の required reviewers で、apply の前に人の承認を挟む。
     environment: production
+    permissions:
+      contents: read
+      # apply の結果をマージ元の PR にコメントするため
+      issues: write
+      pull-requests: write
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -100,6 +148,7 @@ jobs:
       AWS_ENDPOINT_URL_S3: https://${{ vars.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
       TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       TF_VAR_cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -112,4 +161,20 @@ jobs:
 
       - run: terraform init
 
-      - run: terraform apply -auto-approve
+      - name: terraform apply
+        id: apply
+        run: |
+          set +e
+          terraform apply -auto-approve -no-color > "${RUNNER_TEMP}/apply.txt" 2>&1
+          code=$?
+          cat "${RUNNER_TEMP}/apply.txt"
+          echo "code=${code}" >> "$GITHUB_OUTPUT"
+
+      - name: Report apply
+        if: always() && steps.apply.outputs.code != ''
+        run: |
+          "${GITHUB_WORKSPACE}/.github/scripts/tf-report.sh" apply "${{ steps.apply.outputs.code }}" "${RUNNER_TEMP}/apply.txt" terraform-apply
+
+      - name: Fail if apply failed
+        if: steps.apply.outputs.code != '0'
+        run: exit 1

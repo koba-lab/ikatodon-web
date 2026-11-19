@@ -28,7 +28,7 @@ Permission policies → Add policy）。
   - DNS（確認用ホスト名の CNAME）
   - Zone WAF（API 登録の遮断ルール）
   - Dynamic URL Redirects（`/ikatodon-media/` のリダイレクト）
-  - Zone Transform Rules または Transform Rules（`Forwarded` / `Proxy` ヘッダーの除去）
+  - Zone Transform Rules または Transform Rules（`Forwarded` ヘッダーの除去）
 
 | 用途     | 権限                                   | 登録先                                                    |
 | -------- | -------------------------------------- | --------------------------------------------------------- |
@@ -71,8 +71,19 @@ import {
 
 ## 5. apply
 
-この PR をマージすると、`Terraform (cloudflare)` ワークフローが plan → apply を実行します。
-apply の前に Environment `production` の承認を求められます。
+`cloudflare/` を変える PR を出すと、`Terraform (cloudflare)` ワークフローが plan を実行し、
+結果を PR にコメントします（PR を更新するたびに同じコメントが書き換わります）。
+
+マージすると、次の流れで apply されます。
+
+1. もう一度 plan が走り、結果がマージ元の PR にコメントされる
+2. apply が Environment `production` の承認待ちで止まる。PR のコメントにある「実行画面」の
+   リンクを開き、**Review deployments** → `production` にチェック → **Approve and deploy**
+3. apply が走り、結果（成功 / 失敗と、作成・変更・削除の件数）がマージ元の PR にコメントされる
+
+Environment `production` に Required reviewers が設定されていないと、承認なしで apply されて
+しまいます。その場合は plan の時点でワークフローが止まるようにしてあるので、3 の設定を
+見直してください。
 
 ## 6. トンネルのイメージ
 
