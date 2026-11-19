@@ -17,15 +17,27 @@
 
 ## 2. Cloudflare の API トークン
 
-2 つ作ります。どちらも対象ゾーンは `queloud.net` だけに絞ってください。
+2 つ作ります。どちらも 1 つのトークンにポリシーを 2 つ作ります（Create Token → Custom token →
+Permission policies → Add policy）。
 
-| 用途     | 権限                                                                                                                 | 登録先                                                      |
-| -------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| apply 用 | Account: Cloudflare Tunnel 編集 / Zone: Zone 読み取り、DNS 編集、Zone WAF 編集、Single Redirect 編集、Transform Rules 編集 | Environment `production` の Secret `CLOUDFLARE_API_TOKEN`   |
-| plan 用  | 上と同じ項目の読み取り                                                                                               | リポジトリ Secret `CLOUDFLARE_API_TOKEN_READ`               |
+- **ポリシー 1（アカウント単位）**: 対象は Entire Account（またはこのアカウント）
+  - Cloudflare One Connector: cloudflared（検索語 `cloudflared`）。見つからなければ
+    Cloudflare One Connectors、それも無ければ Argo Tunnel (Legacy)
+- **ポリシー 2（ゾーン単位）**: 対象は `queloud.net` だけ
+  - Zone（ゾーン情報。apply 用でも読み取りでよい）
+  - DNS（確認用ホスト名の CNAME）
+  - Zone WAF（API 登録の遮断ルール）
+  - Dynamic URL Redirects（`/ikatodon-media/` のリダイレクト）
+  - Zone Transform Rules または Transform Rules（`Forwarded` / `Proxy` ヘッダーの除去）
 
-権限の名前は Cloudflare の管理画面で変わることがあります。plan / apply で権限不足のエラーが出たら、
-エラーに出た権限を足してください。
+| 用途     | 権限                                   | 登録先                                                    |
+| -------- | -------------------------------------- | --------------------------------------------------------- |
+| apply 用 | 上の項目を Edit（Zone だけ Read）      | Environment `production` の Secret `CLOUDFLARE_API_TOKEN` |
+| plan 用  | 上の項目をすべて Read                  | リポジトリ Secret `CLOUDFLARE_API_TOKEN_READ`             |
+
+権限の名前は Cloudflare 公式ドキュメント（API の権限名）に合わせています。管理画面の表示名は
+変わることがあるので、見つからないときは括弧内の検索語で探してください。plan / apply で権限不足の
+エラーが出たら、エラーに出た権限を足してください。
 
 ## 3. GitHub の設定
 
