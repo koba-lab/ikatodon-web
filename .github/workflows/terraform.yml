@@ -18,10 +18,10 @@ on:
       - '.github/workflows/terraform.yml'
   workflow_dispatch:
 
-# PR の plan と main の apply でグループを分ける。同じグループだと、待機中の main の実行が
-# 後から来た PR の実行に置き換えられ、apply されないことがある。
+# PR の plan、main の apply、main 以外のブランチからの手動実行でグループを分ける。
+# 同じグループだと、待機中の main の実行が後から来た別の実行に置き換えられ、apply されないことがある。
 concurrency:
-  group: terraform-cloudflare-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'main' }}
+  group: terraform-cloudflare-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('ref-{0}', github.ref_name) }}
   cancel-in-progress: false
 
 permissions:
