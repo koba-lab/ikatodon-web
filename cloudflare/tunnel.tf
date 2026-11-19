@@ -2,6 +2,10 @@
 
 resource "random_bytes" "tunnel_secret" {
   length = 32
+
+  keepers = {
+    generation = var.tunnel_secret_generation
+  }
 }
 
 resource "cloudflare_zero_trust_tunnel_cloudflared" "web" {

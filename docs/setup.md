@@ -69,14 +69,15 @@ apply の前に Environment `production` の承認を求められます。
 2. 初回はパッケージを作るだけで、わざと失敗します（トークンは入っていません）。
    apply より先に動いても、この段階ではトンネルを参照しないので問題ありません
 3. GitHub の Packages で `ikatodon-tunnel` を開き、次を確認する
-   - Visibility が **Private** であること（Public なら Private に変更する）
+   - Visibility が **Private** であること。Public になっていたら、この時点ではまだトークンを
+     含んでいないので、パッケージを削除して作り直す（GitHub Packages は一度 Public にすると
+     Private に戻せない）
    - Manage Actions access に `ikatodon-web` リポジトリが Write で入っていること
 4. apply が終わってから、もう一度ワークフローを実行する。今度はトークン入りのイメージが push されます
 
 > [!WARNING]
-> トークン入りのイメージが一度でも Public になった場合は、トンネルの secret を変えてください。
-> `cloudflare/tunnel.tf` の `random_bytes.tunnel_secret` を作り直し（`terraform apply -replace`）、
-> `Tunnel image` を再実行して、各 Web サーバーで pull し直します。
+> トークン入りのイメージが一度でも Public になった場合や、トークンが漏れた疑いがある場合は、
+> 下の「トークンが漏れたとき」の手順を実行してください。
 
 ## 7. Web サーバーで起動する（2 台とも）
 
@@ -112,6 +113,35 @@ curl -sS https://ika-tunnel-test.queloud.net/api/v1/streaming/health
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://ika-tunnel-test.queloud.net/api/v1/accounts
 ```
+
+## トークンが漏れたとき
+
+トークンを持っていれば、偽のコネクタを立てて本番のトラフィックを受け取れます。次の順で対応します。
+
+1. **パッケージが Public になっていたら削除する。** GitHub Packages は一度 Public にすると
+   Private に戻せません。Packages の `ikatodon-tunnel` → Package settings → Delete this package。
+   同じ名前で作り直せない場合は、別名にして `.github/workflows/tunnel-image.yml` と
+   `docker-compose.yml` のイメージ名を変える
+2. **トンネルの secret を変える。** `cloudflare/variables.tf` の `tunnel_secret_generation` の
+   既定値を 1 増やす PR を作り、マージして apply する
+3. **既存の接続を切る。** secret を変えても、古いトークンで接続済みのコネクタは切断されません。
+   Cloudflare API で、トンネルの接続をすべて削除します（トークンは Cloudflare Tunnel の編集権限が
+   あるもの。アカウント ID とトンネル ID は Terraform の変数・出力で確認する）
+
+   ```bash
+   curl -fsS -X DELETE \
+     -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+     "https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/cfd_tunnel/${TUNNEL_ID}/connections"
+   ```
+
+4. **新しいトークンでイメージを作り直す。** `Tunnel image` ワークフローを手で実行する
+5. **両方の Web サーバーで入れ替える。**
+
+   ```bash
+   cd ~/ikatodon-web && git pull && docker compose pull && docker compose up -d
+   ```
+
+6. Cloudflare の管理画面で、コネクタが 2 つだけ接続されていることを確認する
 
 ## イメージの更新
 

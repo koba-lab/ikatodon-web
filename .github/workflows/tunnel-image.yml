@@ -55,7 +55,7 @@ jobs:
           out=$(gh api "$PACKAGE_API" --jq .visibility 2>&1) || status=$?
           if [ "$status" -eq 0 ]; then
             if [ "$out" != "private" ]; then
-              echo "::error::パッケージの公開範囲が ${out} になっています。Private に変更するまでトークン入りのイメージは push しません。"
+              echo "::error::パッケージの公開範囲が ${out} になっています。トークン入りのイメージは push しません。一度 Public になったパッケージは Private に戻せないため、パッケージを削除して作り直してください（docs/setup.md）。"
               exit 1
             fi
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -120,6 +120,6 @@ jobs:
           set -euo pipefail
           visibility=$(gh api "$PACKAGE_API" --jq .visibility)
           if [ "$visibility" != "private" ]; then
-            echo "::error::パッケージが ${visibility} になっています。すぐに Private に戻し、トンネルの secret を変更してください（docs/setup.md）。"
+            echo "::error::パッケージが ${visibility} になっています。トークンが公開されています。docs/setup.md の「トークンが漏れたとき」の手順を直ちに実行してください。"
             exit 1
           fi

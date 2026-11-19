@@ -25,3 +25,9 @@ variable "media_hostname" {
   type        = string
   default     = "files-ika.queloud.net"
 }
+
+variable "tunnel_secret_generation" {
+  description = "トンネルの secret の世代。トークンが漏れたときに 1 増やすと secret が作り直される（docs/setup.md）"
+  type        = number
+  default     = 1
+}
