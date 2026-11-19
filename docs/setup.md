@@ -87,18 +87,36 @@ Environment `production` に Required reviewers が設定されていないと�
 
 ## 6. トンネルのイメージ
 
-1. 5 のマージで `Tunnel image` ワークフローも動きます（`Dockerfile` が変わるため）。
-   動かなかった場合は手で実行する（Actions → Tunnel image → Run workflow）
-2. 初回はパッケージを作るだけで、わざと失敗します（トークンは入っていません）。
-   apply より先に動いても、この段階ではトンネルを参照しないので問題ありません
+パッケージ `ghcr.io/koba-lab/ikatodon-tunnel` は、ワークフローではなく**手元から**作ります。
+公開リポジトリのワークフローが作ったパッケージは、リポジトリの公開範囲を引き継いで Public に
+なるためです。手元から作ったパッケージはリポジトリに紐付かず、Private で作られます。
+
+1. 手元（Docker が使える環境）で ghcr にログインする。`gh` を使う場合:
+
+   ```bash
+   gh auth refresh -s write:packages
+   ```
+
+   ```bash
+   gh auth token | docker login ghcr.io -u <GitHub のユーザー名> --password-stdin
+   ```
+
+2. トークンを含まないイメージで、パッケージを作る
+
+   ```bash
+   docker buildx imagetools create --tag ghcr.io/koba-lab/ikatodon-tunnel:bootstrap cloudflare/cloudflared:2026.10.7
+   ```
+
 3. GitHub の Packages で `ikatodon-tunnel` を開き、次を確認する
-   - Visibility が **Private** であること。Public になっていたら、この時点ではまだトークンを
-     含んでいないので、パッケージを削除する（GitHub Packages は一度 Public にすると Private に
-     戻せない）。そのあと Actions → Tunnel image → Run workflow で手動実行してパッケージを
-     作り直す。この実行もトークンなしのイメージを作って失敗するのが想定どおり。もう一度
-     Private であることを確認してから 4 へ進む
-   - Manage Actions access に `ikatodon-web` リポジトリが Write で入っていること
-4. apply が終わってから、もう一度ワークフローを実行する。今度はトークン入りのイメージが push されます
+   - Visibility が **Private** であること
+   - Package settings → Manage Actions access に `ikatodon-web` リポジトリを **Write** で追加する
+4. Actions → Tunnel image → Run workflow で **visibility_test にチェックを入れて**実行する。
+   トークンを含まないイメージを push して、Private のままかを確かめるだけの実行です
+5. 4 が成功したら、visibility_test のチェックを外してもう一度実行する。今度はトークン入りの
+   イメージが push されます。push の後にも Private のままかを確かめます
+
+パッケージが Public になってしまったら、Package settings → Danger Zone → Change visibility で
+Private に戻してから 4 をやり直します（2026-11 に Public から Private へ戻せることを確認済み）。
 
 > [!WARNING]
 > トークン入りのイメージが一度でも Public になった場合や、トークンが漏れた疑いがある場合は、
@@ -143,10 +161,9 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://ika-tunnel-test.queloud
 
 トークンを持っていれば、偽のコネクタを立てて本番のトラフィックを受け取れます。次の順で対応します。
 
-1. **パッケージが Public になっていたら削除する。** GitHub Packages は一度 Public にすると
-   Private に戻せません。Packages の `ikatodon-tunnel` → Package settings → Delete this package。
-   同じ名前で作り直せない場合は、別名にして `.github/workflows/tunnel-image.yml` と
-   `docker-compose.yml` のイメージ名を変える
+1. **パッケージが Public になっていたら Private に戻す。** Packages の `ikatodon-tunnel` →
+   Package settings → Danger Zone → Change visibility。Private に戻しても、Public だった間に
+   取得されたトークンは使えてしまうので、2 以降は必ず行う
 2. **トンネルの secret を変える。** `cloudflare/variables.tf` の `tunnel_secret_generation` の
    既定値を 1 増やす PR を作り、マージして apply する
 3. **既存の接続を切る。** secret を変えても、古いトークンで接続済みのコネクタは切断されません。
@@ -159,9 +176,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://ika-tunnel-test.queloud
      "https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/cfd_tunnel/${TUNNEL_ID}/connections"
    ```
 
-4. **新しいトークンでイメージを作り直す。** `Tunnel image` ワークフローを手で実行する。
-   1 でパッケージを削除した場合、最初の実行はトークンを含まないイメージでパッケージを作り直して
-   止まるので、Packages で **Private** になっていることを確認してから、もう一度実行する
+4. **新しいトークンでイメージを作り直す。** `Tunnel image` ワークフローを手で実行する
 5. **両方の Web サーバーで入れ替える。**
 
    ```bash
