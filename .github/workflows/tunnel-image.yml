@@ -4,8 +4,11 @@ name: Tunnel image
 # トークンはビルドのたびに Cloudflare API から取得するので、GitHub の Secret には保存しない。
 #
 # パッケージが Private でないと、誰でもトークンを取り出せてしまう。そのため push の前後で
-# 公開範囲を確かめ、Private でなければ失敗させる。パッケージがまだ無いとき（初回）は、
-# トークンを含まないイメージだけを push してパッケージを作り、確認を促して止まる。
+# 公開範囲を確かめ、Private でなければ失敗させる。
+#
+# パッケージはこのワークフローでは作らない。公開リポジトリのワークフローが作ったパッケージは、
+# リポジトリの公開範囲を引き継いで Public になるため。パッケージは手元から Private で作り、
+# このリポジトリに Actions access（Write）を付けておく（docs/setup.md）。
 
 on:
   push:
@@ -16,6 +19,11 @@ on:
       - '.github/workflows/tunnel-image.yml'
   # トンネルの secret を変えたあとなど、トークンを入れ直したいときに手で実行する。
   workflow_dispatch:
+    inputs:
+      visibility_test:
+        description: トークンを入れないイメージだけを push して、パッケージが Private のままか確かめる
+        type: boolean
+        default: false
 
 concurrency:
   group: tunnel-image
@@ -66,16 +74,30 @@ jobs:
             exit 1
           fi
 
-      - name: Create package without token (first run only)
+      - name: Stop if package does not exist
         if: steps.package.outputs.exists == 'false'
+        run: |
+          echo "::error::パッケージ ikatodon-tunnel がありません。このワークフローで作ると Public になるため、docs/setup.md の手順で手元から Private で作成してください。"
+          exit 1
+
+      # トークンを入れないイメージで、push しても Private のままかを確かめる（本番の push の前に一度）。
+      - name: Visibility test (no token)
+        if: inputs.visibility_test
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           base=$(sed -n 's/^FROM \(cloudflare\/cloudflared:[^ ]*\).*/\1/p' Dockerfile)
-          docker buildx imagetools create --tag "${IMAGE}:bootstrap" "$base"
-          echo "::error::パッケージを作成しました（トークンは含んでいません）。GitHub の Packages で ikatodon-tunnel が Private であることを確認し、このワークフローを再実行してください。"
-          exit 1
+          docker buildx imagetools create --tag "${IMAGE}:visibility-test" "$base"
+          visibility=$(gh api "$PACKAGE_API" --jq .visibility)
+          if [ "$visibility" != "private" ]; then
+            echo "::error::push 後にパッケージが ${visibility} になりました。トークン入りのイメージは push しないでください（docs/setup.md）。"
+            exit 1
+          fi
+          echo "push 後も Private のままでした。visibility_test をオフにして実行すると、トークン入りのイメージを push します。"
 
       - name: Fetch tunnel token
+        if: ${{ !inputs.visibility_test }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
@@ -96,8 +118,10 @@ jobs:
           printf '%s' "$token" > "${RUNNER_TEMP}/tunnel_token"
 
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        if: ${{ !inputs.visibility_test }}
 
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        if: ${{ !inputs.visibility_test }}
         with:
           context: .
           platforms: linux/amd64
@@ -114,6 +138,7 @@ jobs:
         run: rm -f "${RUNNER_TEMP}/tunnel_token"
 
       - name: Re-check package visibility
+        if: ${{ !inputs.visibility_test }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

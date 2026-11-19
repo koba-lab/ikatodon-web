@@ -12,7 +12,8 @@ RUN --mount=type=secret,id=tunnel_token,required=true \
     cp /run/secrets/tunnel_token /token
 
 FROM cloudflare/cloudflared:2026.10.7
-LABEL org.opencontainers.image.source="https://github.com/koba-lab/ikatodon-web"
+# org.opencontainers.image.source ラベルは付けない。付けるとパッケージがこの公開リポジトリに
+# 紐付き、公開範囲を引き継ぐおそれがある。
 
 # 65532 は distroless の nonroot ユーザー。
 COPY --from=token --chown=65532:65532 --chmod=0400 /token /etc/cloudflared/token
