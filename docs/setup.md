@@ -21,7 +21,7 @@
 
 | 用途     | 権限                                                                                                                 | 登録先                                                      |
 | -------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| apply 用 | Account: Cloudflare Tunnel 編集 / Zone: DNS 編集、Zone WAF 編集、Single Redirect 編集、Transform Rules 編集          | Environment `production` の Secret `CLOUDFLARE_API_TOKEN`   |
+| apply 用 | Account: Cloudflare Tunnel 編集 / Zone: Zone 読み取り、DNS 編集、Zone WAF 編集、Single Redirect 編集、Transform Rules 編集 | Environment `production` の Secret `CLOUDFLARE_API_TOKEN`   |
 | plan 用  | 上と同じ項目の読み取り                                                                                               | リポジトリ Secret `CLOUDFLARE_API_TOKEN_READ`               |
 
 権限の名前は Cloudflare の管理画面で変わることがあります。plan / apply で権限不足のエラーが出たら、
