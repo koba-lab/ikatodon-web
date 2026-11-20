@@ -31,3 +31,40 @@ variable "tunnel_secret_generation" {
   type        = number
   default     = 1
 }
+
+variable "web_ips" {
+  description = <<-EOT
+    Web サーバーの IP アドレスをカンマ区切りで並べたもの。GitHub Actions の Secret WEB_IPS から渡す
+    （例: 192.0.2.1,192.0.2.2）。公開リポジトリなので、コードにも plan の出力にも出さない。
+    並び順が DNS レコードの番号（direct[0], direct[1], ...）になる。順番を入れ替えると
+    レコードの中身の書き換えになるので、増減は末尾で行う。
+  EOT
+  type        = string
+  sensitive   = true
+
+  # 空だと A レコードがすべて消える plan になる。Secret の登録漏れで本体が引けなくなるのを防ぐ。
+  validation {
+    condition     = length(compact([for ip in split(",", var.web_ips) : trimspace(ip)])) > 0
+    error_message = "web_ips が空です。GitHub Actions の Secret WEB_IPS を確認してください。"
+  }
+
+  # 書き間違い（区切り文字の誤りなど）で壊れたレコードを作らないよう、IPv4 の形かを確かめる。
+  validation {
+    condition = alltrue([
+      for ip in compact([for ip in split(",", var.web_ips) : trimspace(ip)]) :
+      can(regex("^((25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])$", ip))
+    ])
+    error_message = "web_ips に IPv4 アドレスでないものがあります。カンマ区切りで書いてください。"
+  }
+}
+
+variable "ika_via_tunnel" {
+  description = <<-EOT
+    本体（hostname）をトンネル経由にするか。
+    false: Web サーバーの IP を指す A レコード（DNS only）。nginx が直接受ける
+    true:  トンネルを指す CNAME（Proxied）
+    切り替えと切り戻しの手順は docs/cutover.md。
+  EOT
+  type        = bool
+  default     = false
+}
