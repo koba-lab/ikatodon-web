@@ -13,8 +13,8 @@ resource "cloudflare_dns_record" "test" {
 #
 # 同じ名前に A レコードと CNAME は共存できない。tunnel に depends_on を付けると、
 # 切り替え（A → CNAME）でも切り戻し（CNAME → A）でも「古いほうを消してから新しいほうを作る」
-# 順になる（Terraform 1.16.7 で確認）。消してから作るまでの数秒はレコードが無いので、
-# 切り替えの前にゾーンの SOA の Minimum TTL を下げておく（docs/cutover.md）。
+# 順になる（Terraform 1.16.7 で確認）。消してから作るまでの 1 秒前後はレコードが無い
+# （影響と対応は docs/cutover.md）。
 
 locals {
   # カンマ区切りの Secret を配列にする（前後の空白と空の要素は捨てる）
