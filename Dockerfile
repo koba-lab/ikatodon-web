@@ -10,7 +10,7 @@
 # トークンのファイルとその置き場所を、権限ごとこのステージで用意する。
 # COPY --chmod を使うと、自動で作られる親ディレクトリにも同じ権限（0400）が付いて
 # 中に入れなくなるため使わない。65532 は元イメージの実行ユーザー（distroless の nonroot）。
-FROM busybox:1.37.0 AS token
+FROM busybox:1.38.0 AS token
 RUN --mount=type=secret,id=tunnel_token,required=true \
     mkdir -p /out/etc/cloudflared \
     && cp /run/secrets/tunnel_token /out/etc/cloudflared/token \
