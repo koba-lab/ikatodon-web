@@ -44,7 +44,10 @@ Permission policies → Add policy）。
 1. リポジトリ変数（Settings → Secrets and variables → Actions → Variables）
    - `CLOUDFLARE_ACCOUNT_ID`
    - `CLOUDFLARE_ZONE_ID`（`queloud.net` のゾーン ID）
-2. Environment `production` を作る
+2. リポジトリ Secret（Settings → Secrets and variables → Actions → Secrets）
+   - `WEB_IPS`: Web サーバーの IP アドレスをカンマ区切りで（例: `192.0.2.1,192.0.2.2`）。
+     並び順が DNS レコードの番号になるので、台数を増減するときは末尾で行う
+3. Environment `production` を作る
    - Required reviewers: 運営者
    - Deployment branches: `main` のみ
 
