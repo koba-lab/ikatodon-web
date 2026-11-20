@@ -7,17 +7,11 @@ Cloudflare Tunnel 経由に切り替える手順です。[setup.md](setup.md) �
 
 ## 切り替え前に決めること
 
-- [ ] **メンテナンスモード**: いまは nginx が `/var/www/html/maintenance.html` の有無で 503 を
-      返し、許可 IP だけ素通しにしている。Cloudflare 側での代わりを決める
-      （WAF ルールで許可 IP 以外をブロックする案。許可 IP は Cloudflare の IP リストに置き、
-      リポジトリには書かない）
 - [ ] **API 登録遮断のレスポンス**: nginx では JSON のエラーメッセージを返していた。Cloudflare の
       ブロックは Cloudflare 標準の 403 ページになる。独自のレスポンスを返せるかはプランによるので確認する
 - [x] **Host ヘッダー**: 下の「Mastodon 側の事前確認」で確かめる
 - [x] **クライアント IP**: 下の「クライアント IP の仕組み」の通り、設定の変更なしで取れる見込み。
       切り替え前に「Mastodon 側の事前確認」、切り替え後に「クライアント IP の確認」を行う
-- [ ] **アップロード上限**: Cloudflare の無料プランはリクエストボディが 100MB まで。
-      いまの nginx の `client_max_body_size 80m` より大きいので問題ないはず
 - [x] **Let's Encrypt の更新 cron**: nginx を止めるときに止める（それまでは切り戻しに必要）
 - [x] **レコードが無くなる数秒間**: 受け入れる。利用者の少ない時間帯に切り替える（下の「本体の DNS の管理」）
 - [x] **Google のサイト確認用 TXT レコード**: Proxied の CNAME と同じ名前に置いた TXT も引けることを
