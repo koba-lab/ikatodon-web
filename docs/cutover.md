@@ -74,6 +74,8 @@ A レコードと CNAME は同じ名前に共存できないため、apply は�
 ## 手順（案）
 
 1. **前日まで**
+   - `cloudflare/imports.tf` が消えていることを確認する（A レコードの取り込みが済んだら消す。
+     残っていると、切り替えと切り戻しの plan が失敗する）
    - ゾーンの SOA の Minimum TTL が 60 秒になっていることを確認する（`cloudflare/zone.tf`）
    - 本体の A レコードの TTL が 60 秒になっていることを確認する（Terraform で管理）
 2. 「Mastodon 側の事前確認」を 2 台とも行い、200 が返ることを確かめる
@@ -136,8 +138,9 @@ A レコードと CNAME は同じ名前に共存できないため、apply は�
    返る場合は、まだ Cloudflare を経由している
 
 GitHub Actions が動かないなど、1 ができないときだけ、Cloudflare の管理画面で直接戻します
-（CNAME を消し、Web サーバーの IP の A レコードを DNS only・TTL 60 秒で作る）。この場合は
-Terraform の state と実際がずれるので、すぐに `ika_via_tunnel = false` の PR を出し、plan が
-「取り込み（import）だけ」になるよう `cloudflare/imports.tf` に新しいレコードの ID を書いてから
-マージします。ずれたまま別の apply を走らせると、トンネル経由に戻ってしまいます。
+（CNAME を消し、Web サーバーの IP の A レコードを DNS only・TTL 60 秒で作る。コメントは
+`cloudflare/dns.tf` の `direct` と同じ文言にする）。この場合は Terraform の state と実際がずれるので、
+すぐに `ika_via_tunnel = false` の PR を出し、`cloudflare/imports.tf` に新しいレコードの ID を
+書いてからマージします。plan は A レコードの取り込みだけになるはずです（コメントや TTL が
+`dns.tf` と違っていれば、その更新も出る）。取り込みが済んだら `imports.tf` を消します。ずれたまま別の apply を走らせると、トンネル経由に戻ってしまいます。
 （管理画面で消した CNAME が plan で「既に無い」と扱われるかは未確認。plan の結果を見て判断する）
