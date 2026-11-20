@@ -134,12 +134,18 @@ git clone https://github.com/koba-lab/ikatodon-web ~/ikatodon-web
 cd ~/ikatodon-web && docker compose pull && docker compose up -d
 ```
 
-Cloudflare の管理画面（Zero Trust → Networks → Tunnels → `ikatodon-web`）で、コネクタが 2 つ
-接続されていることを確認します。
+ログに `Registered tunnel connection` が出れば接続できています。
+
+Cloudflare の管理画面（dash.cloudflare.com → アカウント → Networking → Tunnels → `ikatodon-web`）で、
+Status が Healthy で、コネクタが 2 つ接続されていることを確認します。
 
 ## 8. 動作確認
 
 確認用ホスト名でトンネル経由のアクセスを確かめます。
+
+確認用ホスト名で確かめられるのは、トンネルの経路、ストリーミングへの振り分け、WAF だけです。
+Mastodon は `ika.queloud.net` 以外の Host を拒否するので、`/health` 以外のパスは 403 になります
+（`cloudflare/tunnel.tf` のコメント）。Mastodon 本体の確認は [cutover.md](cutover.md) で行います。
 
 ```bash
 curl -sS https://ika-tunnel-test.queloud.net/health
@@ -183,7 +189,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://ika-tunnel-test.queloud
    cd ~/ikatodon-web && git pull && docker compose pull && docker compose up -d
    ```
 
-6. Cloudflare の管理画面で、コネクタが 2 つだけ接続されていることを確認する
+6. Cloudflare の管理画面（Networking → Tunnels）で、コネクタが 2 つだけ接続されていることを確認する
 
 ## イメージの更新
 
@@ -193,3 +199,6 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://ika-tunnel-test.queloud
 ```bash
 cd ~/ikatodon-web && git pull && docker compose pull && docker compose up -d
 ```
+
+更新したら、[cutover.md](cutover.md) の「クライアント IP の確認」を行います（cloudflared の
+挙動が変わって、Mastodon が利用者の IP を取れなくなっていないかを見るため）。

@@ -19,13 +19,13 @@ resource "cloudflare_zero_trust_tunnel_cloudflared" "web" {
 
 locals {
   # トンネル経由で受けるホスト名。test_hostname は切り替え前の確認用。
+  #
+  # Host ヘッダーは書き換えない（httpHostHeader を使わない）。本体はクライアントが送った
+  # Host（ika.queloud.net）のまま Mastodon に届く。
+  # 確認用ホスト名は Mastodon の Host チェックで 403 になる。httpHostHeader で書き換えても、
+  # cloudflared は元の Host を X-Forwarded-Host に入れ、Rails はそちらを Host として扱うため
+  # 通らない。確認用ホスト名で確かめられるのは /health などの Host チェック対象外のパスだけ。
   tunnel_hostnames = [var.hostname, var.test_hostname]
-
-  # Host ヘッダーは常に本体のホスト名で Mastodon に渡す。
-  # Mastodon は LOCAL_DOMAIN 以外の Host を拒否するため、確認用ホスト名でもこれが必要。
-  origin_request = {
-    http_host_header = var.hostname
-  }
 }
 
 resource "cloudflare_zero_trust_tunnel_cloudflared_config" "web" {
@@ -39,25 +39,22 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "web" {
       flatten([
         for host in local.tunnel_hostnames : [
           {
-            hostname       = host
-            path           = "^/api/v1/streaming"
-            service        = "http://localhost:4000"
-            origin_request = local.origin_request
+            hostname = host
+            path     = "^/api/v1/streaming"
+            service  = "http://localhost:4000"
           },
           {
-            hostname       = host
-            path           = null
-            service        = "http://localhost:3000"
-            origin_request = local.origin_request
+            hostname = host
+            path     = null
+            service  = "http://localhost:3000"
           },
         ]
       ]),
       [
         {
-          hostname       = null
-          path           = null
-          service        = "http_status:404"
-          origin_request = null
+          hostname = null
+          path     = null
+          service  = "http_status:404"
         },
       ],
     )
