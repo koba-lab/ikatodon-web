@@ -48,16 +48,3 @@ resource "cloudflare_dns_record" "tunnel" {
 
   depends_on = [cloudflare_dns_record.direct]
 }
-
-# 切り替え前の確認用。Proxied の CNAME と同じ名前に置いた TXT が引けるかを確かめる。
-# 本体の ika.queloud.net には Google Search Console の確認用 TXT があり、CNAME（Proxied）に
-# 切り替えると引けなくなる可能性がある（Cloudflare の DNS record types の Proxied CNAME records）。
-# 確かめ終わったら消す。
-resource "cloudflare_dns_record" "test_txt" {
-  zone_id = var.cloudflare_zone_id
-  name    = var.test_hostname
-  type    = "TXT"
-  content = "\"ikatodon-web-txt-test\""
-  ttl     = 1
-  comment = "ikatodon-web: Proxied CNAME と TXT の共存確認用（確認後に削除）"
-}

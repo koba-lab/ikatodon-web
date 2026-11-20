@@ -20,12 +20,8 @@ Cloudflare Tunnel 経由に切り替える手順です。[setup.md](setup.md) �
       いまの nginx の `client_max_body_size 80m` より大きいので問題ないはず
 - [x] **Let's Encrypt の更新 cron**: nginx を止めるときに止める（それまでは切り戻しに必要）
 - [x] **レコードが無くなる数秒間**: 受け入れる。利用者の少ない時間帯に切り替える（下の「本体の DNS の管理」）
-- [ ] **Google のサイト確認用 TXT レコード**: `ika.queloud.net` に TXT レコードがある。CNAME を
-      Proxied にすると、同じ名前の他の種類のレコードは引けなくなる（Cloudflare の DNS record types の
-      Proxied CNAME records）。Search Console の確認が外れる可能性があるので、別の確認方法
-      （HTML ファイルなど）に移すか、外れてもよいかを決める。Search Console は使っている。
-      まず確認用ホスト名に置いた TXT（`cloudflare_dns_record.test_txt`）が引けるかで、
-      Cloudflare の挙動を確かめる
+- [x] **Google のサイト確認用 TXT レコード**: Proxied の CNAME と同じ名前に置いた TXT も引けることを
+      確認用ホスト名で確かめた（2026-11）。切り替え後も `ika.queloud.net` の TXT は残る
 
 ## クライアント IP の仕組み
 
