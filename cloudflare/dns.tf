@@ -13,8 +13,8 @@ resource "cloudflare_dns_record" "test" {
 #
 # 同じ名前に A レコードと CNAME は共存できない。tunnel に depends_on を付けると、
 # 切り替え（A → CNAME）でも切り戻し（CNAME → A）でも「古いほうを消してから新しいほうを作る」
-# 順になる（Terraform 1.16.7 で確認）。消してから作るまでの数秒はレコードが無いので、
-# 切り替えの前にゾーンの SOA の Minimum TTL を下げておく（docs/cutover.md）。
+# 順になる（Terraform 1.16.7 で確認）。消してから作るまでの 1 秒前後はレコードが無い
+# （影響と対応は docs/cutover.md）。
 
 locals {
   # カンマ区切りの Secret を配列にする（前後の空白と空の要素は捨てる）
@@ -47,17 +47,4 @@ resource "cloudflare_dns_record" "tunnel" {
   comment = "ikatodon-web: トンネル経由（Terraform 管理）"
 
   depends_on = [cloudflare_dns_record.direct]
-}
-
-# 切り替え前の確認用。Proxied の CNAME と同じ名前に置いた TXT が引けるかを確かめる。
-# 本体の ika.queloud.net には Google Search Console の確認用 TXT があり、CNAME（Proxied）に
-# 切り替えると引けなくなる可能性がある（Cloudflare の DNS record types の Proxied CNAME records）。
-# 確かめ終わったら消す。
-resource "cloudflare_dns_record" "test_txt" {
-  zone_id = var.cloudflare_zone_id
-  name    = var.test_hostname
-  type    = "TXT"
-  content = "\"ikatodon-web-txt-test\""
-  ttl     = 1
-  comment = "ikatodon-web: Proxied CNAME と TXT の共存確認用（確認後に削除）"
 }

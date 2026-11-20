@@ -7,25 +7,15 @@ Cloudflare Tunnel 経由に切り替える手順です。[setup.md](setup.md) �
 
 ## 切り替え前に決めること
 
-- [ ] **メンテナンスモード**: いまは nginx が `/var/www/html/maintenance.html` の有無で 503 を
-      返し、許可 IP だけ素通しにしている。Cloudflare 側での代わりを決める
-      （WAF ルールで許可 IP 以外をブロックする案。許可 IP は Cloudflare の IP リストに置き、
-      リポジトリには書かない）
-- [ ] **API 登録遮断のレスポンス**: nginx では JSON のエラーメッセージを返していた。Cloudflare の
-      ブロックは Cloudflare 標準の 403 ページになる。独自のレスポンスを返せるかはプランによるので確認する
+- [x] **API 登録遮断のレスポンス**: Cloudflare 標準の 403 ページのままにする（nginx では JSON の
+      エラーメッセージを返していた。独自のレスポンスは Pro プラン以上が必要）
 - [x] **Host ヘッダー**: 下の「Mastodon 側の事前確認」で確かめる
 - [x] **クライアント IP**: 下の「クライアント IP の仕組み」の通り、設定の変更なしで取れる見込み。
       切り替え前に「Mastodon 側の事前確認」、切り替え後に「クライアント IP の確認」を行う
-- [ ] **アップロード上限**: Cloudflare の無料プランはリクエストボディが 100MB まで。
-      いまの nginx の `client_max_body_size 80m` より大きいので問題ないはず
 - [x] **Let's Encrypt の更新 cron**: nginx を止めるときに止める（それまでは切り戻しに必要）
-- [x] **SOA の Minimum TTL**: Terraform（`cloudflare/zone.tf`）で 60 秒に下げる
-- [ ] **Google のサイト確認用 TXT レコード**: `ika.queloud.net` に TXT レコードがある。CNAME を
-      Proxied にすると、同じ名前の他の種類のレコードは引けなくなる（Cloudflare の DNS record types の
-      Proxied CNAME records）。Search Console の確認が外れる可能性があるので、別の確認方法
-      （HTML ファイルなど）に移すか、外れてもよいかを決める。Search Console は使っている。
-      まず確認用ホスト名に置いた TXT（`cloudflare_dns_record.test_txt`）が引けるかで、
-      Cloudflare の挙動を確かめる
+- [x] **レコードが無くなる数秒間**: 受け入れる。利用者の少ない時間帯に切り替える（下の「本体の DNS の管理」）
+- [x] **Google のサイト確認用 TXT レコード**: Proxied の CNAME と同じ名前に置いた TXT も引けることを
+      確認用ホスト名で確かめた（2026-11）。切り替え後も `ika.queloud.net` の TXT は残る
 
 ## クライアント IP の仕組み
 
@@ -67,16 +57,16 @@ curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: ika.queloud.net' -H 'X-Forwar
 - `true`: トンネルを指す CNAME（Proxied、TTL は Cloudflare が 300 秒に固定）
 
 A レコードと CNAME は同じ名前に共存できないため、apply は「古いほうを消してから新しいほうを作る」
-順で動きます。その間の数秒はレコードが無く、その瞬間に引いたリゾルバーは「存在しない」という
-答えをキャッシュします。キャッシュの長さはゾーンの SOA の Minimum TTL（既定 1800 秒）で決まるので、
-切り替えの前に下げておきます。
+順で動きます。その間（1 秒前後）はレコードが無く、その瞬間に引いたリゾルバーは「存在しない」という
+答えを、ゾーンの SOA の Minimum TTL（1800 秒）の間キャッシュします。このゾーンでは SOA を変更できない
+（API が `Custom SOA records are not available to this account or zone` を返す）ので、このリスクは
+受け入れ、利用者の少ない時間帯に切り替えと切り戻しを行います。
 
 ## 手順（案）
 
 1. **前日まで**
-   - `cloudflare/imports.tf` が消えていることを確認する（A レコードの取り込みが済んだら消す。
-     残っていると、切り替えと切り戻しの plan が失敗する）
-   - ゾーンの SOA の Minimum TTL が 60 秒になっていることを確認する（`cloudflare/zone.tf`）
+   - `cloudflare/imports.tf` が無いことを確認する（残っていると、切り替えと切り戻しの plan が失敗する）
+   - 切り替えの時間を、利用者の少ない時間帯に決める
    - 本体の A レコードの TTL が 60 秒になっていることを確認する（Terraform で管理）
 2. **トンネルが動いていることを確かめる**（切り戻しで cloudflared を止めた後の再切り替えでも必ず行う）
    - 2 台とも cloudflared を起動する
@@ -98,8 +88,7 @@ A レコードと CNAME は同じ名前に共存できないため、apply は�
 5. 問題がなくても、**切り替え前の A レコードの TTL（60 秒）以上の時間**が経つまでは nginx と
    80 / 443 を残しておく
 6. 切り戻す必要がないと判断できたら、各 Web サーバーで nginx を止め、80 / 443 を閉じる。
-   Let's Encrypt の更新 cron を止め、`cloudflare/zone.tf` の `min_ttl` を 1800 に戻す
-   （リソースを消しても設定は戻らない）
+   Let's Encrypt の更新 cron を止める
 
 ## クライアント IP の確認
 
@@ -123,7 +112,6 @@ A レコードと CNAME は同じ名前に共存できないため、apply は�
 
 - nginx を止めない。80 / 443 を閉じない
 - Let's Encrypt の更新 cron を止めない（証明書が切れていると戻れない）
-- SOA の Minimum TTL を下げたままにしておく
 
 ### 手順
 
@@ -149,7 +137,16 @@ A レコードと CNAME は同じ名前に共存できないため、apply は�
 GitHub Actions が動かないなど、1 ができないときだけ、Cloudflare の管理画面で直接戻します
 （CNAME を消し、Web サーバーの IP の A レコードを DNS only・TTL 60 秒で作る。コメントは
 `cloudflare/dns.tf` の `direct` と同じ文言にする）。この場合は Terraform の state と実際がずれるので、
-すぐに `ika_via_tunnel = false` の PR を出し、`cloudflare/imports.tf` に新しいレコードの ID を
+すぐに `ika_via_tunnel = false` の PR を出し、`cloudflare/imports.tf` を作って新しいレコードの ID を
 書いてからマージします。plan は A レコードの取り込みだけになるはずです（コメントや TTL が
-`dns.tf` と違っていれば、その更新も出る）。取り込みが済んだら `imports.tf` を消します。ずれたまま別の apply を走らせると、トンネル経由に戻ってしまいます。
+`dns.tf` と違っていれば、その更新も出る）。取り込みが済んだら `imports.tf` を消します。
+
+```hcl
+import {
+  to = cloudflare_dns_record.direct[0]
+  id = "${var.cloudflare_zone_id}/<レコード ID>"
+}
+```
+
+ずれたまま別の apply を走らせると、トンネル経由に戻ってしまいます。
 （管理画面で消した CNAME が plan で「既に無い」と扱われるかは未確認。plan の結果を見て判断する）
