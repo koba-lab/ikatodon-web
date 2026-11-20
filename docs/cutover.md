@@ -78,7 +78,16 @@ A レコードと CNAME は同じ名前に共存できないため、apply は�
      残っていると、切り替えと切り戻しの plan が失敗する）
    - ゾーンの SOA の Minimum TTL が 60 秒になっていることを確認する（`cloudflare/zone.tf`）
    - 本体の A レコードの TTL が 60 秒になっていることを確認する（Terraform で管理）
-2. 「Mastodon 側の事前確認」を 2 台とも行い、200 が返ることを確かめる
+2. **トンネルが動いていることを確かめる**（切り戻しで cloudflared を止めた後の再切り替えでも必ず行う）
+   - 2 台とも cloudflared を起動する
+
+     ```bash
+     cd ~/ikatodon-web && docker compose pull && docker compose up -d
+     ```
+
+   - Cloudflare の管理画面（Networking → Tunnels）で `ikatodon-web` が Healthy、コネクタが 2 つ
+   - 確認用ホスト名で疎通を確かめる（[setup.md](setup.md) の「8. 動作確認」。OK / OK / 403）
+   - 「Mastodon 側の事前確認」を 2 台とも行い、200 が返ることを確かめる
 3. `ika_via_tunnel` の既定値を `true` にする PR を作る。plan が「A レコード 2 つの削除と
    CNAME 1 つの作成」だけであることを確認してマージし、apply を承認する
 4. 確認
