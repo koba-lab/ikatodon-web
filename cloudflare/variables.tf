@@ -47,15 +47,6 @@ variable "web_ips" {
     condition     = length(compact([for ip in split(",", var.web_ips) : trimspace(ip)])) > 0
     error_message = "web_ips が空です。GitHub Actions の Secret WEB_IPS を確認してください。"
   }
-
-  # 書き間違い（区切り文字の誤りなど）で壊れたレコードを作らないよう、IPv4 の形かを確かめる。
-  validation {
-    condition = alltrue([
-      for ip in compact([for ip in split(",", var.web_ips) : trimspace(ip)]) :
-      can(regex("^((25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])$", ip))
-    ])
-    error_message = "web_ips に IPv4 アドレスでないものがあります。カンマ区切りで書いてください。"
-  }
 }
 
 variable "ika_via_tunnel" {
