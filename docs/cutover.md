@@ -19,12 +19,13 @@ Cloudflare Tunnel 経由に切り替える手順です。[setup.md](setup.md) �
 - [ ] **アップロード上限**: Cloudflare の無料プランはリクエストボディが 100MB まで。
       いまの nginx の `client_max_body_size 80m` より大きいので問題ないはず
 - [x] **Let's Encrypt の更新 cron**: nginx を止めるときに止める（それまでは切り戻しに必要）
-- [ ] **SOA の Minimum TTL**: 下げる方法（管理画面か Terraform か）を決める。Cloudflare の API では
-      ゾーンの DNS 設定（`dns_settings` の `soa`）で変えられる
+- [x] **SOA の Minimum TTL**: Terraform（`cloudflare/zone.tf`）で 60 秒に下げる
 - [ ] **Google のサイト確認用 TXT レコード**: `ika.queloud.net` に TXT レコードがある。CNAME を
       Proxied にすると、同じ名前の他の種類のレコードは引けなくなる（Cloudflare の DNS record types の
       Proxied CNAME records）。Search Console の確認が外れる可能性があるので、別の確認方法
-      （HTML ファイルなど）に移すか、外れてもよいかを決める
+      （HTML ファイルなど）に移すか、外れてもよいかを決める。Search Console は使っている。
+      まず確認用ホスト名に置いた TXT（`cloudflare_dns_record.test_txt`）が引けるかで、
+      Cloudflare の挙動を確かめる
 
 ## クライアント IP の仕組み
 
@@ -73,7 +74,7 @@ A レコードと CNAME は同じ名前に共存できないため、apply は�
 ## 手順（案）
 
 1. **前日まで**
-   - ゾーンの SOA の Minimum TTL を 60 秒に下げる（設定方法は別途確認する）
+   - ゾーンの SOA の Minimum TTL が 60 秒になっていることを確認する（`cloudflare/zone.tf`）
    - 本体の A レコードの TTL が 60 秒になっていることを確認する（Terraform で管理）
 2. 「Mastodon 側の事前確認」を 2 台とも行い、200 が返ることを確かめる
 3. `ika_via_tunnel` の既定値を `true` にする PR を作る。plan が「A レコード 2 つの削除と
@@ -86,7 +87,8 @@ A レコードと CNAME は同じ名前に共存できないため、apply は�
 5. 問題がなくても、**切り替え前の A レコードの TTL（60 秒）以上の時間**が経つまでは nginx と
    80 / 443 を残しておく
 6. 切り戻す必要がないと判断できたら、各 Web サーバーで nginx を止め、80 / 443 を閉じる。
-   Let's Encrypt の更新 cron を止め、SOA の Minimum TTL を元に戻す
+   Let's Encrypt の更新 cron を止め、`cloudflare/zone.tf` の `min_ttl` を 1800 に戻す
+   （リソースを消しても設定は戻らない）
 
 ## クライアント IP の確認
 
