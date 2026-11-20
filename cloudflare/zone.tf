@@ -7,11 +7,11 @@
 #
 # このリソースは import できず、作ると既存の設定を上書きする。書いていない項目が既定値に
 # 戻らないよう、min_ttl 以外は 2026-11 時点の値（API の dns_settings）をそのまま書き写している。
+# API の foundation_dns はこのリソースの引数に無いので書いていない（プロバイダ v5.29 のドキュメント）。
 resource "cloudflare_zone_dns_settings" "this" {
   zone_id = var.cloudflare_zone_id
 
   flatten_all_cnames  = false
-  foundation_dns      = false
   multi_provider      = false
   secondary_overrides = false
   zone_mode           = "standard"
