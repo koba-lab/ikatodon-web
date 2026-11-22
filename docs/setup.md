@@ -27,7 +27,8 @@ Permission policies → Add policy）。
   - DNS（本体の CNAME）
   - Zone WAF（API 登録の遮断ルール）
   - Dynamic URL Redirects（`/ikatodon-media/` のリダイレクト）
-  - Zone Transform Rules または Transform Rules（`Forwarded` ヘッダーの除去）
+  - Zone Transform Rules または Transform Rules（`Forwarded` ヘッダーの除去、メディアのパスの
+    書き換えと CORS ヘッダー）
 
 | 用途     | 権限                                   | 登録先                                                    |
 | -------- | -------------------------------------- | --------------------------------------------------------- |
@@ -63,11 +64,16 @@ Secret の名前は apply 用と同じ `CLOUDFLARE_API_TOKEN` ですが、Enviro
 Cloudflare のルールセット（WAF のカスタムルール、リダイレクト、ヘッダーの変換）は、フェーズごとに
 1 ゾーンに 1 つしか作れません。`queloud.net` に管理画面で作ったルールが既にあると、apply が失敗します。
 
-管理画面で次の 3 つにルールがあるか確認してください。
+Terraform で管理しているのは次の 5 つです。ここに管理画面でルールを足すと、次の apply で消えます。
+ルールを足すときは `cloudflare/rules.tf` に書いてください。
 
 - Security → WAF → Custom rules
 - Rules → Redirect Rules
+- Rules → Transform Rules → URL Rewrite
 - Rules → Transform Rules → Request Header Transform
+- Rules → Transform Rules → Response Header Transform
+
+これ以外のフェーズのルールを Terraform で管理し始めるときは、管理画面にルールがあるか先に確認します。
 
 既存のルールがある場合は、そのルールを `cloudflare/rules.tf` に書き写してから、ルールセットを
 import します（import の PR を別に作る）。
