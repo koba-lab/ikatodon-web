@@ -1,8 +1,7 @@
 # 構築と運用
 
 Cloudflare 側（Terraform）とトンネルのイメージを用意し、Web サーバーで cloudflared を動かすまでの
-手順と、運用で使う手順です。nginx からこの構成へ移行したときの経緯は
-[2026-11-22-cloudflare-tunnel-migration.md](2026-11-22-cloudflare-tunnel-migration.md) にあります。
+手順と、運用で使う手順です。構成とその理由は [architecture.md](architecture.md) にあります。
 
 ## 1. R2（Terraform の state 置き場）
 
@@ -163,27 +162,15 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://ika.queloud.net/api/v1/
 
 ## クライアント IP の確認
 
-cloudflared（トンネルのイメージ）を更新した後や、Mastodon の `TRUSTED_PROXY_IP` を変えた後に行います。
+cloudflared（トンネルのイメージ）を更新した後や、Mastodon の `TRUSTED_PROXY_IP` を変えた後に行います
+（仕組みは [architecture.md](architecture.md) の「クライアント IP」）。
 
 1. ブラウザで `https://ika.queloud.net/cdn-cgi/trace` を開き、`ip=` の値を見る（自分の回線の IP）
 2. 自分のアカウントでログインし直し、`https://ika.queloud.net/auth/edit`（ユーザー設定 →
-   アカウント → セキュリティ）の「セッション」で、現在のセッションの IP が 1 と同じかを見る
-3. `127.0.0.1`、`172.` で始まるアドレス、Cloudflare の IP になっていたら、利用者の IP が取れていない。
-   全員が同じ IP に見えるため、レート制限が全員まとめてかかり、IP ブロックも効かなくなる。
-   直前の変更を戻す
-
-仕組みは次のとおりです。
-
-- Cloudflare は `X-Forwarded-For` の右端に、Cloudflare に接続してきた IP を足してオリジンに送る
-  （[Cloudflare HTTP headers](https://developers.cloudflare.com/fundamentals/reference/http-headers/)）
-- Rails（`ActionDispatch::RemoteIp`）は `X-Forwarded-For` を右から見て、信頼するプロキシ（既定では
-  ループバックとプライベートアドレス）を飛ばし、最初に出てきた IP を利用者の IP にする
-- cloudflared はサーバー上から `localhost:3000` に接続するので、Mastodon から見た接続元は信頼する
-  プロキシの範囲に入る。本番の `.env.production` に `TRUSTED_PROXY_IP` はない（2026-11 に確認）
-
-Cloudflare は `CF-Connecting-IP` を勧めていますが、Mastodon は読みません（読ませるには上流の
-コードの変更が要る）。Tunnel 経由でも `X-Forwarded-For` が付くことはドキュメントに明記されていない
-ため、更新のたびにこの確認を行います。
+   アカウント → セキュリティ）の「セッション」で、現在のセッションの IP を見る
+3. 1 と 2 が一致すれば成功。一致しなければ、利用者の IP が取れていない（`127.0.0.1`、Docker の
+   ネットワークのアドレス、Cloudflare の IP などに見えることが多い）。全員が同じ IP に見えるため、
+   レート制限が全員まとめてかかり、IP ブロックも効かなくなる。直前の変更を戻してから原因を調べる
 
 ## トークンが漏れたとき
 
