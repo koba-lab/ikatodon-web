@@ -18,7 +18,7 @@ RUN --mount=type=secret,id=tunnel_token,required=true \
     && chmod 0500 /out/etc/cloudflared \
     && chmod 0400 /out/etc/cloudflared/token
 
-FROM cloudflare/cloudflared:2026.10.7
+FROM cloudflare/cloudflared:2026.11.1
 # org.opencontainers.image.source ラベルは付けない。付けるとパッケージがこの公開リポジトリに
 # 紐付き、公開範囲を引き継ぐおそれがある。
 
