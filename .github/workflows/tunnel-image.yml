@@ -30,7 +30,10 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    environment: production
+    # 手で実行するワークフローなので、承認（Required reviewers）のない専用の Environment を使う。
+    # Deployment branches を main だけにしてあるので、main 以外のブランチで書き換えた
+    # ワークフローからはトークンを使えない（docs/setup.md の 3）。
+    environment: image-build
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
