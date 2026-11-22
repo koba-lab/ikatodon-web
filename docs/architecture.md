@@ -29,6 +29,11 @@ nginx が担っていた処理は、次のところで行っています。
 | 旧メディア URL（`/ikatodon-media/`）のリダイレクト          | Redirect Rules（`cloudflare/rules.tf`）         |
 | `Forwarded` ヘッダーの除去                                  | Request Header Transform（`cloudflare/rules.tf`） |
 
+メディア（`files-ika.queloud.net`）は Web サーバーを通らず、Cloudflare から Backblaze B2 へ直接届きます。
+B2 の公開 URL（`/file/ikatodon-media/<キー>`）に合わせるパスの書き換え（URL Rewrite）と、
+CORS ヘッダー（`Access-Control-Allow-Origin: *`、`Vary: Origin`）の付与（Response Header Transform）も
+`cloudflare/rules.tf` で管理しています。
+
 次のものは持っていません。
 
 - **メンテナンスモード**（nginx の `geo $allow_ip` で、許可した IP 以外を止める仕組み）。使う予定がない

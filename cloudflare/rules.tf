@@ -4,7 +4,8 @@
 # 管理画面で作ったルールが既にある場合、apply は失敗する。先に import すること（docs/setup.md）。
 
 locals {
-  host_expression = "http.host eq \"${var.hostname}\""
+  host_expression       = "http.host eq \"${var.hostname}\""
+  media_host_expression = "(http.host eq \"${var.media_hostname}\")"
 }
 
 # アプリ・API 経由の新規登録（POST /api/v1/accounts）を遮断する。
@@ -73,6 +74,67 @@ resource "cloudflare_ruleset" "request_header_transform" {
       action_parameters = {
         headers = {
           "Forwarded" = { operation = "remove" }
+        }
+      }
+    },
+  ]
+}
+
+# ここから下はメディア配信用ホスト（files-ika.queloud.net）のルール。オリジンは Backblaze B2。
+# どちらも管理画面で作ったものを import した。ルールセットの name は管理画面で作ったときの "default" のまま。
+# name を変えると作り直し（削除してから作成）になり、その間メディアが配信できなくなる。
+
+import {
+  to = cloudflare_ruleset.request_transform
+  id = "zones/${var.cloudflare_zone_id}/85f7dd7c64b1461194848f10767e98b1"
+}
+
+import {
+  to = cloudflare_ruleset.response_header_transform
+  id = "zones/${var.cloudflare_zone_id}/fe2daf0c3a544223aa4cc962f544df4f"
+}
+
+# B2 の公開 URL は /file/<バケット名>/<キー> なので、パスの前にバケットのパスを付ける。
+resource "cloudflare_ruleset" "request_transform" {
+  zone_id = var.cloudflare_zone_id
+  name    = "default"
+  kind    = "zone"
+  phase   = "http_request_transform"
+
+  rules = [
+    {
+      description = "Rewrite path for object storage bucket"
+      expression  = local.media_host_expression
+      action      = "rewrite"
+      enabled     = true
+      action_parameters = {
+        uri = {
+          path = {
+            expression = "concat(\"/file/ikatodon-media\", http.request.uri.path)"
+          }
+        }
+      }
+    },
+  ]
+}
+
+# 他のホスト（Web UI など）からメディアを読めるように CORS ヘッダーを付ける。
+resource "cloudflare_ruleset" "response_header_transform" {
+  zone_id = var.cloudflare_zone_id
+  name    = "default"
+  kind    = "zone"
+  phase   = "http_response_headers_transform"
+
+  rules = [
+    {
+      description = "Object Storage CORS header"
+      expression  = local.media_host_expression
+      action      = "rewrite"
+      enabled     = true
+      action_parameters = {
+        headers = {
+          "Access-Control-Allow-Origin" = { operation = "set", value = "*" }
+          "Vary"                        = { operation = "set", value = "Origin" }
         }
       }
     },

@@ -15,7 +15,7 @@ variable "hostname" {
 }
 
 variable "media_hostname" {
-  description = "メディア配信用のホスト名（/ikatodon-media/ のリダイレクト先）"
+  description = "メディア配信用のホスト名（/ikatodon-media/ のリダイレクト先。B2 へのパスの書き換えと CORS ヘッダーの対象）"
   type        = string
   default     = "files-ika.queloud.net"
 }
