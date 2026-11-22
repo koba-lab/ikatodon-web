@@ -109,10 +109,9 @@ Environment `production` に Required reviewers が設定されていないと�
 3. GitHub の Packages で `ikatodon-tunnel` を開き、次を確認する
    - Visibility が **Private** であること
    - Package settings → Manage Actions access に `ikatodon-web` リポジトリを **Write** で追加する
-4. Actions → Tunnel image → Run workflow で **visibility_test にチェックを入れて**実行する。
-   トークンを含まないイメージを push して、Private のままかを確かめるだけの実行です
-5. 4 が成功したら、visibility_test のチェックを外してもう一度実行する。今度はトークン入りの
-   イメージが push されます。push の後にも Private のままかを確かめます
+4. Actions → Tunnel image → Run workflow で実行する。ワークフローは push の前と後に、パッケージが
+   Private かを確かめる（前で Public なら、トークン入りのイメージは push しない）。ワークフローからの
+   push で Private のパッケージが Public に変わらないことは、2026-11 に確認済み
 
 パッケージが Public になってしまったら、Package settings → Danger Zone → Change visibility で
 Private に戻してから 4 をやり直します（2026-11 に Public から Private へ戻せることを確認済み）。
