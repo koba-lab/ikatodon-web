@@ -35,7 +35,9 @@ Redis は koba-lab/ikatodon-redis にあります。
 
 - トップレベル: コンテナ関係（`Dockerfile`、`docker-compose.yml`）
 - `cloudflare/`: Cloudflare に適用する Terraform
-- `docs/`: 手順書
+- `docs/`: 今の状態だけを書く。構成とその理由は `architecture.md`、手順は `setup.md`。
+  構成や手順を変えたら、同じ PR で書き換える。作業の経緯（いつ何をしたか）は PR とコミットに残し、
+  `docs/` には置かない
 
 Web サーバーで使うのはトップレベルの `docker-compose.yml` だけです。新しい適用先
 （例: ConoHa）を Terraform で管理するときは、`cloudflare/` と並べてディレクトリを足します。

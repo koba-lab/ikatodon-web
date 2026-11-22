@@ -1,14 +1,10 @@
-# これまで Web サーバーの nginx が担っていた処理を Cloudflare のルールに移す。
+# 以前 Web サーバーの nginx が担っていた処理を Cloudflare のルールで行う。
 #
 # ゾーンの各フェーズのルールセット（エントリーポイント）は 1 ゾーンに 1 つしか作れない。
 # 管理画面で作ったルールが既にある場合、apply は失敗する。先に import すること（docs/setup.md）。
-#
-# 本体（ika.queloud.net）はまだ Cloudflare を経由していない（DNS only）ため、
-# 切り替えまでは本体に対してこれらのルールは効かない。
 
 locals {
-  # 例: http.host in {"ika.queloud.net" "ika-tunnel-test.queloud.net"}
-  host_expression = "http.host in {${join(" ", formatlist("\"%s\"", local.tunnel_hostnames))}}"
+  host_expression = "http.host eq \"${var.hostname}\""
 }
 
 # アプリ・API 経由の新規登録（POST /api/v1/accounts）を遮断する。
