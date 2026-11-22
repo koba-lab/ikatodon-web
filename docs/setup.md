@@ -1,8 +1,8 @@
-# 初期準備
+# 構築と運用
 
-トンネルを作り、確認用ホスト名（`ika-tunnel-test.queloud.net`）でトンネル経由の動作を
-確かめるところまでの手順です。本体（`ika.queloud.net`）はこの手順では切り替えません。
-切り替えは [cutover.md](cutover.md) を参照してください。
+Cloudflare 側（Terraform）とトンネルのイメージを用意し、Web サーバーで cloudflared を動かすまでの
+手順と、運用で使う手順です。nginx からこの構成へ移行したときの経緯は
+[2026-11-22-cloudflare-tunnel-migration.md](2026-11-22-cloudflare-tunnel-migration.md) にあります。
 
 ## 1. R2（Terraform の state 置き場）
 
@@ -25,7 +25,7 @@ Permission policies → Add policy）。
     Cloudflare One Connectors、それも無ければ Argo Tunnel (Legacy)
 - **ポリシー 2（ゾーン単位）**: 対象は `queloud.net` だけ
   - Zone（ゾーン情報。apply 用でも読み取りでよい）
-  - DNS（確認用ホスト名の CNAME）
+  - DNS（本体の CNAME）
   - Zone WAF（API 登録の遮断ルール）
   - Dynamic URL Redirects（`/ikatodon-media/` のリダイレクト）
   - Zone Transform Rules または Transform Rules（`Forwarded` ヘッダーの除去）
@@ -44,10 +44,7 @@ Permission policies → Add policy）。
 1. リポジトリ変数（Settings → Secrets and variables → Actions → Variables）
    - `CLOUDFLARE_ACCOUNT_ID`
    - `CLOUDFLARE_ZONE_ID`（`queloud.net` のゾーン ID）
-2. リポジトリ Secret（Settings → Secrets and variables → Actions → Secrets）
-   - `WEB_IPS`: Web サーバーの IP アドレスをカンマ区切りで（例: `192.0.2.1,192.0.2.2`）。
-     並び順が DNS レコードの番号になるので、台数を増減するときは末尾で行う
-3. Environment `production` を作る
+2. Environment `production` を作る
    - Required reviewers: 運営者
    - Deployment branches: `main` のみ
 
@@ -128,6 +125,8 @@ Private に戻してから 4 をやり直します（2026-11 に Public から P
 ## 7. Web サーバーで起動する（2 台とも）
 
 ghcr への `docker login` は Mastodon のイメージを pull するために済んでいる前提です。
+Web サーバーは 80 / 443 を開けません（ConoHa の接続許可ポートは SSH だけ）。cloudflared は
+Cloudflare へ外向きに接続するだけなので、受け付けるポートは要りません。
 
 ```bash
 git clone https://github.com/koba-lab/ikatodon-web ~/ikatodon-web
@@ -144,27 +143,47 @@ Status が Healthy で、コネクタが 2 つ接続されていることを確�
 
 ## 8. 動作確認
 
-確認用ホスト名でトンネル経由のアクセスを確かめます。
-
-確認用ホスト名で確かめられるのは、トンネルの経路、ストリーミングへの振り分け、WAF だけです。
-Mastodon は `ika.queloud.net` 以外の Host を拒否するので、`/health` 以外のパスは 403 になります
-（`cloudflare/tunnel.tf` のコメント）。Mastodon 本体の確認は [cutover.md](cutover.md) で行います。
-
 ```bash
-curl -sS https://ika-tunnel-test.queloud.net/health
+curl -sS -o /dev/null -w '%{http_version} %{http_code}\n' https://ika.queloud.net/health
 ```
 
 ```bash
-curl -sS https://ika-tunnel-test.queloud.net/api/v1/streaming/health
+curl -sS https://ika.queloud.net/api/v1/streaming/health
 ```
 
-どちらも `OK` が返れば成功です。
+`2 200`（または `3 200`）と `OK` が返れば、トンネル経由で web と streaming に届いています。
 
 `POST /api/v1/accounts` が遮断されることも確認します（403 が返れば成功）。
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' -X POST https://ika-tunnel-test.queloud.net/api/v1/accounts
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://ika.queloud.net/api/v1/accounts
 ```
+
+あわせて下の「クライアント IP の確認」を行います。
+
+## クライアント IP の確認
+
+cloudflared（トンネルのイメージ）を更新した後や、Mastodon の `TRUSTED_PROXY_IP` を変えた後に行います。
+
+1. ブラウザで `https://ika.queloud.net/cdn-cgi/trace` を開き、`ip=` の値を見る（自分の回線の IP）
+2. 自分のアカウントでログインし直し、`https://ika.queloud.net/auth/edit`（ユーザー設定 →
+   アカウント → セキュリティ）の「セッション」で、現在のセッションの IP が 1 と同じかを見る
+3. `127.0.0.1`、`172.` で始まるアドレス、Cloudflare の IP になっていたら、利用者の IP が取れていない。
+   全員が同じ IP に見えるため、レート制限が全員まとめてかかり、IP ブロックも効かなくなる。
+   直前の変更を戻す
+
+仕組みは次のとおりです。
+
+- Cloudflare は `X-Forwarded-For` の右端に、Cloudflare に接続してきた IP を足してオリジンに送る
+  （[Cloudflare HTTP headers](https://developers.cloudflare.com/fundamentals/reference/http-headers/)）
+- Rails（`ActionDispatch::RemoteIp`）は `X-Forwarded-For` を右から見て、信頼するプロキシ（既定では
+  ループバックとプライベートアドレス）を飛ばし、最初に出てきた IP を利用者の IP にする
+- cloudflared はサーバー上から `localhost:3000` に接続するので、Mastodon から見た接続元は信頼する
+  プロキシの範囲に入る。本番の `.env.production` に `TRUSTED_PROXY_IP` はない（2026-11 に確認）
+
+Cloudflare は `CF-Connecting-IP` を勧めていますが、Mastodon は読みません（読ませるには上流の
+コードの変更が要る）。Tunnel 経由でも `X-Forwarded-For` が付くことはドキュメントに明記されていない
+ため、更新のたびにこの確認を行います。
 
 ## トークンが漏れたとき
 
@@ -203,5 +222,5 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://ika-tunnel-test.queloud
 cd ~/ikatodon-web && git pull && docker compose pull && docker compose up -d
 ```
 
-更新したら、[cutover.md](cutover.md) の「クライアント IP の確認」を行います（cloudflared の
-挙動が変わって、Mastodon が利用者の IP を取れなくなっていないかを見るため）。
+更新したら、「8. 動作確認」と「クライアント IP の確認」を行います（cloudflared の挙動が変わって、
+Mastodon が利用者の IP を取れなくなっていないかを見るため）。

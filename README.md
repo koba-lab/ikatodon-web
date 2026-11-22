@@ -11,8 +11,8 @@ Mastodon 本体は [koba-lab/mastodon](https://github.com/koba-lab/mastodon)、D
 Client → Cloudflare → (Tunnel) → cloudflared → web (127.0.0.1:3000) / streaming (127.0.0.1:4000)
 ```
 
-Web サーバーの前段にあった nginx を、Cloudflare Tunnel と Cloudflare のルールに置き換えます。
-Web サーバーは 80 / 443 を開ける必要がなくなり、nginx の脆弱性対応も不要になります。
+以前は Web サーバーの nginx が 80 / 443 を直接公開していましたが、2026-11-22 に Cloudflare Tunnel と
+Cloudflare のルールに置き換えました。Web サーバーは 80 / 443 を開けていません。
 
 ## ディレクトリ
 
@@ -21,15 +21,18 @@ Web サーバーは 80 / 443 を開ける必要がなくなり、nginx の脆弱
 | `docker-compose.yml` | cloudflared を動かす compose                         | Web サーバー（`docker compose up`） |
 | `Dockerfile`         | トンネルのトークン入り cloudflared イメージ          | GitHub Actions（ビルド）           |
 | `cloudflare/`        | トンネル、DNS、ルールの Terraform                    | GitHub Actions（plan / apply）     |
-| `docs/`              | 手順書                                               | 人                                 |
+| `docs/`              | 手順書と作業記録                                     | 人                                 |
 
 トップレベルはコンテナ関係、`cloudflare/` は Terraform、と分けています。
 Web サーバーで使うのは `docker-compose.yml` だけです。
 
 ## 手順
 
-- [初期準備](docs/setup.md)
-- [本番の切り替え](docs/cutover.md)
+- [構築と運用](docs/setup.md)
+
+## 作業記録
+
+- [nginx から Cloudflare Tunnel への移行（2026-11-22）](docs/2026-11-22-cloudflare-tunnel-migration.md)
 
 ## 公開リポジトリとしての注意
 
