@@ -14,11 +14,6 @@ name: Tunnel image
 # （Dockerfile を変えたあと、トンネルの secret を変えたあとなど）。
 on:
   workflow_dispatch:
-    inputs:
-      visibility_test:
-        description: トークンを入れないイメージだけを push して、パッケージが Private のままか確かめる
-        type: boolean
-        default: false
 
 concurrency:
   group: tunnel-image
@@ -56,18 +51,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: .github/scripts/check-package.sh exists
 
-      # トークンを入れないイメージで、push しても Private のままかを確かめる（本番の push の前に一度）。
-      - name: Visibility test (no token)
-        if: inputs.visibility_test
-        run: |
-          set -euo pipefail
-          base=$(sed -n 's/^FROM \(cloudflare\/cloudflared:[^ ]*\).*/\1/p' Dockerfile)
-          docker buildx imagetools create --tag "${IMAGE}:visibility-test" "$base"
-          .github/scripts/check-package.sh private
-          echo "push 後も Private のままでした。visibility_test をオフにして実行すると、トークン入りのイメージを push します。"
-
       - name: Fetch tunnel token
-        if: ${{ !inputs.visibility_test }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
@@ -88,10 +72,8 @@ jobs:
           printf '%s' "$token" > "${RUNNER_TEMP}/tunnel_token"
 
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-        if: ${{ !inputs.visibility_test }}
 
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        if: ${{ !inputs.visibility_test }}
         with:
           context: .
           platforms: linux/amd64
@@ -108,7 +90,6 @@ jobs:
         run: rm -f "${RUNNER_TEMP}/tunnel_token"
 
       - name: Re-check package is private
-        if: ${{ !inputs.visibility_test }}
         run: |
           if ! .github/scripts/check-package.sh private; then
             echo "::error::トークン入りのイメージが公開されている可能性があります。docs/setup.md の「トークンが漏れたとき」の手順を直ちに実行してください。"
