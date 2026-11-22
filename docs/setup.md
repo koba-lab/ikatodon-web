@@ -37,9 +37,9 @@ Permission policies → Add policy）。
 ほかに、トンネルのイメージを作るワークフロー（Tunnel image）用のトークンを 1 つ作ります。トンネルの
 トークンの取得には Edit 権限が要るため、権限はポリシー 1 だけにして、ゾーンの権限は付けません。
 
-| 用途            | 権限                                              | 登録先                                                             |
-| --------------- | ------------------------------------------------- | ------------------------------------------------------------------ |
-| Tunnel image 用 | ポリシー 1 の項目を Edit（ポリシー 2 は作らない） | Environment `tunnel-image` の Secret `CLOUDFLARE_API_TOKEN_TUNNEL` |
+| 用途            | 権限                                              | 登録先                                                            |
+| --------------- | ------------------------------------------------- | ----------------------------------------------------------------- |
+| Tunnel image 用 | ポリシー 1 の項目を Edit（ポリシー 2 は作らない） | Environment `image-build` の Secret `CLOUDFLARE_API_TOKEN_TUNNEL` |
 
 権限の名前は Cloudflare 公式ドキュメント（API の権限名）に合わせています。管理画面の表示名は
 変わることがあるので、見つからないときは括弧内の検索語で探してください。plan / apply で権限不足の
@@ -53,7 +53,7 @@ Permission policies → Add policy）。
 2. Environment `production` を作る
    - Required reviewers: 運営者
    - Deployment branches: `main` のみ
-3. Environment `tunnel-image` を作る（Tunnel image ワークフロー用）
+3. Environment `image-build` を作る（Tunnel image ワークフロー用）
    - Required reviewers: なし（手で実行するワークフローなので、実行そのものが運営者の判断になる）
    - Deployment branches: `main` のみ（main 以外のブランチで書き換えたワークフローにトークンを渡さないため）
 
