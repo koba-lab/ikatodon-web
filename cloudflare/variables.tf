@@ -57,5 +57,5 @@ variable "ika_via_tunnel" {
     切り替えと切り戻しの手順は docs/cutover.md。
   EOT
   type        = bool
-  default     = false
+  default     = true
 }
